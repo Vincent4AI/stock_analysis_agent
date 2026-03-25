@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mini Stock Agent</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root {
+  --bg: #f0f2f8;
+  --card: #ffffff;
+  --primary: #6366f1;
+  --primary-light: #818cf8;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --router: #6366f1;
+  --analyst: #059669;
+  --news: #7c3aed;
+  --tool: #d97706;
+  --orchestrator: #2563eb;
+  --radius: 14px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh;
+}
+
+/* Header */
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white; padding: 2.5rem 1.5rem 2rem; text-align: center;
+  position: relative; overflow: hidden;
+}
+.header::after {
+  content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
+  height: 40px; background: var(--bg); border-radius: 50% 50% 0 0;
+}
+.header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: 1px; }
+.header p { opacity: 0.85; margin-top: 0.4rem; font-size: 0.95rem; }
+.settings-btn {
+  position: absolute; top: 1rem; right: 1.2rem; background: rgba(255,255,255,0.2);
+  border: none; color: white; width: 36px; height: 36px; border-radius: 50%;
+  font-size: 1.2rem; cursor: pointer; transition: background 0.2s; z-index: 3;
+  display: flex; align-items: center; justify-content: center;
+}
+.settings-btn:hover { background: rgba(255,255,255,0.35); }
+.key-status {
+  position: absolute; top: 1rem; right: 3.8rem; z-index: 3;
+  font-size: 0.72rem; padding: 0.2rem 0.6rem; border-radius: 10px;
+  display: flex; align-items: center; gap: 4px;
+}
+.key-status.ok { background: rgba(34,197,94,0.25); color: #bbf7d0; }
+.key-status.missing { background: rgba(239,68,68,0.25); color: #fecaca; }
+
+/* Container */
+.container { max-width: 760px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+
+/* Input Card */
+.input-card {
+  background: var(--card); border-radius: var(--radius); padding: 1.5rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06); margin-top: -1rem;
+  position: relative; z-index: 2;
+}
+.input-label { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.6rem; }
+.input-row { display: flex; gap: 0.6rem; }
+.input-row input {
+  flex: 1; padding: 0.8rem 1rem; border: 2px solid var(--border);
+  border-radius: 12px; font-size: 1rem; transition: border-color 0.2s;
+  outline: none; color: var(--text); background: #f8fafc;
+}
+.input-row input:focus { border-color: var(--primary); background: white; }
+.input-row input::placeholder { color: #a0aec0; }
+.btn-analyze {
+  padding: 0.8rem 1.6rem; background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white; border: none; border-radius: 12px; font-size: 1rem;
+  font-weight: 600; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+  white-space: nowrap;
+}
+.btn-analyze:hover:not(:disabled) {
+  transform: translateY(-1px); box-shadow: 0 6px 20px rgba(102,126,234,0.35);
+}
+.btn-analyze:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+/* Quick Picks */
+.quick-picks { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+.quick-picks span { font-size: 0.8rem; color: var(--text-secondary); line-height: 2; }
+.quick-pick {
+  padding: 0.35rem 0.9rem; background: #f0f0ff; border: 1px solid #e0e0ff;
+  border-radius: 20px; color: var(--primary); cursor: pointer; font-size: 0.85rem;
+  transition: all 0.15s; user-select: none;
+}
+.quick-pick:hover { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* Sections */
+.section { margin-top: 1.8rem; }
+.section-title {
+  font-size: 0.9rem; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 2px; margin-bottom: 1rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.section-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.section-title .dot.live { animation: pulse 1.5s infinite; background: #ef4444; }
+.section-title .dot.done { background: #22c55e; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 1.8rem; }
+.timeline::before {
+  content: ''; position: absolute; left: 6px; top: 4px; bottom: 4px;
+  width: 2px; background: linear-gradient(to bottom, var(--border), transparent);
+}
+.step { position: relative; margin-bottom: 0.75rem; animation: fadeSlideIn 0.35s ease-out both; }
+.step::before {
+  content: ''; position: absolute; left: -1.55rem; top: 12px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--border); border: 2px solid var(--bg); z-index: 1;
+}
+.step.router::before { background: var(--router); }
+.step.analyst::before { background: var(--analyst); }
+.step.news::before { background: var(--news); }
+.step.orchestrator::before { background: var(--orchestrator); }
+.step-card {
+  background: var(--card); border-radius: 10px; padding: 0.8rem 1rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04); border-left: 3px solid var(--border);
+}
+.step.router .step-card { border-left-color: var(--router); }
+.step.analyst .step-card { border-left-color: var(--analyst); }
+.step.news .step-card { border-left-color: var(--news); }
+.step.orchestrator .step-card { border-left-color: var(--orchestrator); }
+.step-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem; }
+.step-icon { font-size: 1rem; }
+.step-agent {
+  font-size: 0.75rem; font-weight: 600; padding: 0.1rem 0.5rem;
+  border-radius: 10px; color: white;
+}
+.step-agent.router { background: var(--router); }
+.step-agent.analyst { background: var(--analyst); }
+.step-agent.news { background: var(--news); }
+.step-agent.orchestrator { background: var(--orchestrator); }
+.step-type {
+  font-size: 0.7rem; color: var(--text-secondary);
+  background: #f1f5f9; padding: 0.1rem 0.4rem; border-radius: 6px;
+}
+.step-content {
+  font-size: 0.88rem; color: var(--text); white-space: pre-wrap; word-break: break-word;
+}
+.step-content.data-result {
+  background: #f8fafc; border-radius: 8px; padding: 0.6rem 0.8rem;
+  margin-top: 0.3rem; font-family: 'SF Mono','Fira Code',monospace;
+  font-size: 0.82rem; color: #334155; max-height: 150px; overflow-y: auto;
+}
+@keyframes fadeSlideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+
+/* Report */
+.report-card {
+  background: var(--card); border-radius: var(--radius); padding: 2rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.06); animation: fadeSlideIn 0.4s ease-out;
+  border-top: 4px solid var(--primary);
+}
+.report-content { line-height: 1.9; font-size: 0.95rem; }
+.report-content h1 { font-size:1.3rem; margin:1.2rem 0 .5rem; border-bottom:1px solid var(--border); padding-bottom:.3rem; }
+.report-content h2 { font-size:1.15rem; margin:1rem 0 .4rem; }
+.report-content h3 { font-size:1.05rem; margin:.8rem 0 .3rem; color:var(--primary); }
+.report-content p { margin:.5rem 0; }
+.report-content ul,.report-content ol { padding-left:1.5rem; margin:.5rem 0; }
+.report-content li { margin:.25rem 0; }
+.report-content table { width:100%; border-collapse:collapse; margin:.8rem 0; font-size:.9rem; }
+.report-content th,.report-content td { padding:.5rem .8rem; border:1px solid var(--border); text-align:left; }
+.report-content th { background:#f8fafc; font-weight:600; }
+.report-content code { background:#f1f5f9; padding:.15rem .4rem; border-radius:4px; font-size:.85em; }
+.report-content blockquote { border-left:3px solid var(--primary); padding:.5rem 1rem; background:#f8f9ff; border-radius:0 8px 8px 0; margin:.5rem 0; color:var(--text-secondary); }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+  z-index: 100; display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  background: white; border-radius: 16px; padding: 0; width: 90%; max-width: 440px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15); animation: modalIn 0.25s ease-out;
+}
+@keyframes modalIn { from{opacity:0;transform:scale(0.95)} to{opacity:1;transform:scale(1)} }
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 1.2rem 1.5rem; border-bottom: 1px solid var(--border);
+}
+.modal-header h3 { font-size: 1.1rem; }
+.modal-close {
+  background: none; border: none; font-size: 1.5rem; cursor: pointer;
+  color: var(--text-secondary); line-height: 1; padding: 0 4px;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 1.5rem; }
+.modal-body label {
+  display: block; font-size: 0.85rem; font-weight: 600;
+  color: var(--text); margin-bottom: 0.4rem;
+}
+.modal-body input {
+  width: 100%; padding: 0.7rem 0.9rem; border: 2px solid var(--border);
+  border-radius: 10px; font-size: 0.9rem; outline: none;
+  font-family: 'SF Mono','Fira Code',monospace; transition: border-color 0.2s;
+}
+.modal-body input:focus { border-color: var(--primary); }
+.modal-hint {
+  font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem; line-height: 1.4;
+}
+.modal-footer {
+  padding: 1rem 1.5rem; border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: 0.5rem;
+}
+.btn-modal {
+  padding: 0.6rem 1.4rem; border: none; border-radius: 10px;
+  font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.btn-save {
+  background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+}
+.btn-save:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102,126,234,0.35); }
+.btn-cancel { background: #f1f5f9; color: var(--text-secondary); }
+.btn-cancel:hover { background: #e2e8f0; }
+
+/* Hidden & Empty */
+.hidden { display: none !important; }
+.empty-state { text-align: center; padding: 3rem 1rem; color: #94a3b8; }
+.empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.empty-state p { font-size: 0.9rem; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .header { padding: 2rem 1rem 1.5rem; }
+  .header h1 { font-size: 1.4rem; }
+  .input-row { flex-direction: column; }
+  .btn-analyze { width: 100%; }
+  .report-card { padding: 1.25rem; }
+  .key-status { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Mini Stock Agent</h1>
+  <p>AI 多Agent协作 - 智能选股分析系统</p>
+  <span class="key-status missing" id="key-status">
+    <span id="key-dot">&#x25CF;</span> <span id="key-label">未配置 Key</span>
+  </span>
+  <button class="settings-btn" id="settings-open" title="设置 API Key">&#x2699;&#xFE0F;</button>
+</div>
+
+<div class="container">
+  <!-- Input -->
+  <div class="input-card">
+    <div class="input-label">输入股票代码或公司名称，开始智能分析</div>
+    <div class="input-row">
+      <input type="text" id="query-input" placeholder="例如：分析贵州茅台(600519)的投资价值">
+      <button class="btn-analyze" id="analyze-btn">开始分析</button>
+    </div>
+    <div class="quick-picks">
+      <span>快速体验:</span>
+      <div class="quick-pick" data-query="帮我分析一下贵州茅台（600519）的投资价值">贵州茅台</div>
+      <div class="quick-pick" data-query="分析五粮液（000858）的基本面和估值">五粮液</div>
+      <div class="quick-pick" data-query="分析中国平安（601318）的基本面和近期市场情绪">中国平安</div>
+    </div>
+  </div>
+
+  <!-- Process -->
+  <div class="section hidden" id="process-section">
+    <div class="section-title">
+      <span class="dot live" id="process-dot"></span>
+      <span id="process-label">分析进行中</span>
+    </div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+
+  <!-- Report -->
+  <div class="section hidden" id="report-section">
+    <div class="section-title"><span class="dot done"></span> 分析报告</div>
+    <div class="report-card">
+      <div class="report-content" id="report-content"></div>
+    </div>
+  </div>
+
+  <!-- Empty -->
+  <div class="empty-state" id="empty-state">
+    <div class="icon">&#x1F4C8;</div>
+    <p>输入股票信息，AI 将自动协调多个Agent完成分析</p>
+    <p style="margin-top:0.3rem;font-size:0.8rem;color:#b0b8c8">
+      Router Agent &rarr; Analyst Agent &rarr; News Agent &rarr; 综合报告
+    </p>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay hidden" id="settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>&#x2699;&#xFE0F; API 设置</h3>
+      <button class="modal-close" id="modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <label>MiniMax API Key</label>
+      <input type="password" id="api-key-input" placeholder="eyJhbGci... 或 sk-...">
+      <p class="modal-hint">
+        &#x1F512; Key 仅保存在浏览器本地 (localStorage)，不会上传存储。<br>
+        获取方式: <a href="https://platform.minimax.chat" target="_blank" style="color:var(--primary)">MiniMax 开放平台</a>
+      </p>
+      <div style="margin-top:1.2rem">
+        <label>Base URL (可选)</label>
+        <input type="text" id="base-url-input" placeholder="默认: https://api.minimax.io/v1">
+        <p class="modal-hint">如使用国内域名可改为 https://api.minimaxi.com/v1</p>
+      </div>
+      <div style="margin-top:1.2rem">
+        <label>模型 (可选)</label>
+        <input type="text" id="model-input" placeholder="默认: MiniMax-M2.7">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-modal btn-cancel" id="modal-cancel">取消</button>
+      <button class="btn-modal btn-save" id="modal-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ====== Elements ====== */
+const input = document.getElementById('query-input');
+const btn = document.getElementById('analyze-btn');
+const timeline = document.getElementById('timeline');
+const processSection = document.getElementById('process-section');
+const processDot = document.getElementById('process-dot');
+const processLabel = document.getElementById('process-label');
+const reportSection = document.getElementById('report-section');
+const reportContent = document.getElementById('report-content');
+const emptyState = document.getElementById('empty-state');
+const settingsModal = document.getElementById('settings-modal');
+const keyStatus = document.getElementById('key-status');
+const keyLabel = document.getElementById('key-label');
+
+/* ====== Settings ====== */
+function loadSettings() {
+  document.getElementById('api-key-input').value = localStorage.getItem('minimax_api_key') || '';
+  document.getElementById('base-url-input').value = localStorage.getItem('minimax_base_url') || '';
+  document.getElementById('model-input').value = localStorage.getItem('minimax_model') || '';
+  updateKeyStatus();
+}
+
+function saveSettings() {
+  const key = document.getElementById('api-key-input').value.trim();
+  const baseUrl = document.getElementById('base-url-input').value.trim();
+  const model = document.getElementById('model-input').value.trim();
+  if (key) localStorage.setItem('minimax_api_key', key); else localStorage.removeItem('minimax_api_key');
+  if (baseUrl) localStorage.setItem('minimax_base_url', baseUrl); else localStorage.removeItem('minimax_base_url');
+  if (model) localStorage.setItem('minimax_model', model); else localStorage.removeItem('minimax_model');
+  settingsModal.classList.add('hidden');
+  updateKeyStatus();
+}
+
+function updateKeyStatus() {
+  const hasKey = !!localStorage.getItem('minimax_api_key');
+  keyStatus.className = 'key-status ' + (hasKey ? 'ok' : 'missing');
+  keyLabel.textContent = hasKey ? 'Key 已配置' : '未配置 Key';
+}
+
+function openSettings() { settingsModal.classList.remove('hidden'); loadSettings(); }
+function closeSettings() { settingsModal.classList.add('hidden'); }
+
+document.getElementById('settings-open').addEventListener('click', openSettings);
+document.getElementById('modal-close').addEventListener('click', closeSettings);
+document.getElementById('modal-cancel').addEventListener('click', closeSettings);
+document.getElementById('modal-save').addEventListener('click', saveSettings);
+settingsModal.addEventListener('click', function(e) { if (e.target === settingsModal) closeSettings(); });
+
+/* ====== Quick Picks ====== */
+document.querySelectorAll('.quick-pick').forEach(function(el) {
+  el.addEventListener('click', function() { input.value = el.dataset.query; startAnalysis(); });
+});
+btn.addEventListener('click', startAnalysis);
+input.addEventListener('keydown', function(e) { if (e.key === 'Enter') startAnalysis(); });
+
+/* ====== Analysis ====== */
+async function startAnalysis() {
+  const query = input.value.trim();
+  if (!query) { input.focus(); return; }
+
+  const apiKey = localStorage.getItem('minimax_api_key') || '';
+  if (!apiKey) { openSettings(); return; }
+
+  // Reset UI
+  btn.disabled = true;
+  btn.textContent = '分析中...';
+  timeline.innerHTML = '';
+  reportSection.classList.add('hidden');
+  reportContent.innerHTML = '';
+  emptyState.classList.add('hidden');
+  processSection.classList.remove('hidden');
+  processDot.className = 'dot live';
+  processLabel.textContent = '分析进行中';
+
+  try {
+    const headers = { 'Content-Type': 'application/json', 'X-API-Key': apiKey };
+    const baseUrl = localStorage.getItem('minimax_base_url');
+    const model = localStorage.getItem('minimax_model');
+    if (baseUrl) headers['X-Base-URL'] = baseUrl;
+    if (model) headers['X-Model'] = model;
+
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ query: query })
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event = JSON.parse(line.slice(6));
+          handleEvent(event);
+        } catch (e) { /* ignore parse errors */ }
+      }
+    }
+  } catch (error) {
+    addStep('system', '&#x26A0;&#xFE0F;', 'error', '请求失败: ' + error.message);
+  }
+  finish();
+}
+
+function handleEvent(event) {
+  if (event.type === 'done') return;
+  if (event.type === 'error') {
+    addStep('system', '&#x274C;', 'error', event.message);
+    return;
+  }
+  if (event.type === 'result') {
+    const report = (event.data && event.data.report) || event.message || '';
+    reportContent.innerHTML = marked.parse(report);
+    reportSection.classList.remove('hidden');
+    setTimeout(function() { reportSection.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+    return;
+  }
+  var agent = event.agent || 'system';
+  var icon = getIcon(event.type);
+  var typeLabel = getTypeLabel(event.type);
+  var content = event.message || '';
+  var isData = event.type === 'tool_result';
+  addStep(agent, icon, typeLabel, content, isData);
+}
+
+function finish() {
+  btn.disabled = false;
+  btn.textContent = '开始分析';
+  processDot.className = 'dot done';
+  processLabel.textContent = '分析流程完成';
+}
+
+function addStep(agent, icon, typeLabel, content, isData) {
+  var step = document.createElement('div');
+  step.className = 'step ' + agent;
+  step.innerHTML =
+    '<div class="step-card">' +
+      '<div class="step-header">' +
+        '<span class="step-icon">' + icon + '</span>' +
+        '<span class="step-agent ' + agent + '">' + getAgentLabel(agent) + '</span>' +
+        '<span class="step-type">' + typeLabel + '</span>' +
+      '</div>' +
+      '<div class="step-content' + (isData ? ' data-result' : '') + '">' +
+        escapeHtml(content) +
+      '</div>' +
+    '</div>';
+  timeline.appendChild(step);
+  step.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function getIcon(type) {
+  var m = { start:'&#x1F680;', routing_start:'&#x1F9ED;', routing_done:'&#x1F500;',
+    agent_start:'&#x1F916;', turn:'&#x1F4AD;', tool_call:'&#x1F527;',
+    tool_result:'&#x1F4CA;', answer:'&#x2705;', delegate:'&#x1F91D;',
+    delegate_request:'&#x1F91D;', force_summary:'&#x1F4DD;', error:'&#x274C;' };
+  return m[type] || '&#x25CF;';
+}
+function getTypeLabel(type) {
+  var m = { start:'启动', routing_start:'路由', routing_done:'路由结果',
+    agent_start:'启动Agent', turn:'思考', tool_call:'调用工具',
+    tool_result:'工具返回', answer:'生成回答', delegate:'委托',
+    delegate_request:'委托请求', force_summary:'强制总结', error:'错误' };
+  return m[type] || type;
+}
+function getAgentLabel(agent) {
+  var m = { router:'Router', analyst:'Analyst', news:'News',
+    orchestrator:'Orchestrator', system:'System' };
+  return m[agent] || agent;
+}
+function escapeHtml(text) {
+  var div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/* ====== Init ====== */
+loadSettings();
+updateKeyStatus();
+</script>
+</body>
+</html>
